@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Test Atom Feed</title>
+  <entry>
+    <id>https://arxiv.org/abs/2501.00001</id>
+    <title>Test Paper One</title>
+    <author><name>Alice Smith</name></author>
+    <author><name>Bob Jones</name></author>
+    <summary>Abstract of paper one.</summary>
+    <link href="https://arxiv.org/abs/2501.00001" rel="alternate"/>
+    <published>2025-01-01T00:00:00Z</published>
+    <updated>2025-01-01T00:00:00Z</updated>
+  </entry>
+  <entry>
+    <id>https://arxiv.org/abs/2501.00002</id>
+    <title>Test Paper Two</title>
+    <author><name>Carol White</name></author>
+    <summary>Abstract of paper two.</summary>
+    <link href="https://arxiv.org/abs/2501.00002" rel="alternate"/>
+    <published>2025-01-02T00:00:00Z</published>
+    <updated>2025-01-02T00:00:00Z</updated>
+  </entry>
+</feed>
