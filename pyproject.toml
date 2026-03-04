@@ -28,6 +28,9 @@ dependencies = [
     "mcp>=1.0.0",
 ]
 
+[project.scripts]
+zotero-arxiv-mcp = "zotero_arxiv_daily.mcp_server:mcp.run"
+
 [tool.uv.sources]
 torch = { index = "pytorch" }
 
