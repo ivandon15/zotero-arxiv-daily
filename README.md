@@ -18,8 +18,8 @@
 
 ---
 
-<p align="center"> Recommend new arxiv papers of your interest daily according to your Zotero library.
-    <br> 
+<p align="center"> Recommend new papers of your interest daily from arXiv, Nature, Science, and any RSS feed — via email or MCP.
+    <br>
 </p>
 
 > [!IMPORTANT]
@@ -35,15 +35,16 @@
 - Totally free! All the calculation can be done in the Github Action runner locally within its quota (for public repo).
 - AI-generated TL;DR for you to quickly pick up target papers.
 - Affiliations of the paper are resolved and presented.
-- Links of PDF and code implementation (if any) presented in the e-mail.
-- List of papers sorted by relevance with your recent research interest.
+- Links to papers sorted by relevance with your recent research interest.
 - Fast deployment via fork this repo and set environment variables in the Github Action Page.
 - Support LLM API for generating TL;DR of papers.
 - Ignore unwanted Zotero papers using glob pattern.
-- Support multiple sources of papers to retrieve:
-  - arxiv
-  - biorxiv
-  - medrxiv
+- **Universal RSS retriever** — fetch from any RSS/Atom feed source:
+  - arXiv (any category): `"arxiv:cs.AI"`, `"arxiv:cs.LG+cs.CV"`, etc.
+  - BioRxiv / MedRxiv: `"biorxiv:neuroscience"`, `"medrxiv:psychiatry"`
+  - Nature, Science, Cell, PNAS, PLOS, eLife, PubMed
+  - Any custom RSS/Atom URL
+- **MCP server** — expose the full pipeline as tools for AI agents.
 
 ## 📷 Screenshot
 ![screenshot](./assets/screenshot.png)
@@ -93,12 +94,13 @@ llm:
     model: gpt-4o-mini
 
 source:
-  arxiv:
-    category: ["cs.AI","cs.CV","cs.LG","cs.CL"]
+  rss:
+    feeds: ["arxiv:cs.AI", "arxiv:cs.CV", "arxiv:cs.LG", "arxiv:cs.CL"]
+    since_days: 1
 
 executor:
   debug: ${oc.env:DEBUG,null}
-  source: ['arxiv']
+  source: ['rss']
 ```
 >[!NOTE]
 > `${oc.env:XXX,yyy}` means the value of the environment variable `XXX`. If the variable is not set, the default value `yyy` will be used.
@@ -107,53 +109,60 @@ Here is the full configuration, `???` means the value must be filled in:
 ```yaml
 zotero:
   user_id: ??? # User ID of your Zotero account.
-  api_key: ??? # An Zotero API key with read access.
-  include_path: null # A glob pattern marking the Zotero collections that should be included. Example: "2026/survey/**"
+  api_key: ??? # A Zotero API key with read access.
+  include_path: null # A glob pattern to filter Zotero collections. Example: "2026/survey/**"
 
 source:
-  arxiv:
-    category: null # The categories of target arxiv papers. Find the abbr of your research area from [here](https://arxiv.org/category_taxonomy). Example: ["cs.AI","cs.CV","cs.LG","cs.CL"]
-  biorxiv:
-    category: null # The categories of target biorxiv papers. Find categories from [here](https://www.biorxiv.org/). Example: ["biochemistry","animal behavior and cognition"]
-  medrxiv:
-    category: null # The categories of target medrxiv papers. Find categories from [here](https://www.medrxiv.org/) Example: ["psychiatry and clinical psychology", "neurology"]
+  rss:
+    feeds: []  # List of feed specs. Examples:
+               #   "arxiv:cs.AI"          — arXiv CS.AI category
+               #   "arxiv:cs.AI+cs.LG"    — multiple arXiv categories combined
+               #   "biorxiv:neuroscience" — BioRxiv neuroscience
+               #   "medrxiv:psychiatry"   — MedRxiv psychiatry
+               #   "nature"               — Nature journal
+               #   "science"              — Science journal
+               #   "cell"                 — Cell journal
+               #   "pnas"                 — PNAS
+               #   "plos_biology"         — PLOS Biology
+               #   "elife"                — eLife
+               #   "pubmed_trending"      — PubMed trending
+               #   "https://..."          — any custom RSS/Atom URL
+    since_days: 1  # Only retrieve papers from the last N days. Set to null for all available.
 
 email:
   sender: ??? # The email account of the SMTP server that sends you email. Example: abc@qq.com
   receiver: ??? # The email account that receives the paper list. Example: abc@outlook.com
-  smtp_server: ??? # The SMTP server that sends the email. Ask your email provider (Gmail, QQ, Outlook, ...) for its SMTP server. Example: smtp.qq.com
+  smtp_server: ??? # The SMTP server. Ask your email provider. Example: smtp.qq.com
   smtp_port: ??? # The port of SMTP server. Example: 465
-  sender_password: ??? # The password of the sender account. Note that it's not necessarily the password for logging in the e-mail client, but the authentication code for SMTP service. Ask your email provider for this. Example: abcdefghijklmn
+  sender_password: ??? # The SMTP authentication code (not your login password). Example: abcdefghijklmn
 
 llm:
   api:
     key: ??? # API Key of your LLM API. Example: sk-xxx
     base_url: ??? # API URL of your LLM API. Example: https://api.openai.com/v1
   generation_kwargs:
-  # Arguments for the LLM API. See [here](https://platform.openai.com/docs/api-reference/chat/create) for more details.
     max_tokens: 16384
     model: ???
   language: English # Preferred language for the TL;DR. Example: English
 
 reranker:
   local:
-    model: jinaai/jina-embeddings-v5-text-nano # The Hugging Face model name of the local embedding model. Example: jinaai/jina-embeddings-v5-text-nano
+    model: jinaai/jina-embeddings-v5-text-nano
     encode_kwargs:
-    # The kwargs for the encode method of the local embedding model. Details see [here](https://www.sbert.net/docs/package_reference/SentenceTransformer.html#sentence_transformers.SentenceTransformer.encode)
       task: retrieval
       prompt_name: document
   api:
-    key: null # API Key of your embedding model API. Example: sk-xxx
-    base_url: null # API URL of your embedding model API. Example: https://api.openai.com/v1
-    model: null # The model name of the embedding model. Example: text-embedding-3-large
+    key: null
+    base_url: null
+    model: null
 
 executor:
-  debug: false # Whether to use debug mode. Example: true
-  send_empty: false # Whether to send an empty email even if no new papers today. Example: true
-  max_workers: 10 # Concurrent workers for processing papers. Example: 10
-  max_paper_num: 100 # The maximum number of the papers presented in the email. Example: 100
-  source: ??? # The sources of papers to retrieve. Example: ['arxiv','biorxiv','medrxiv']
-  reranker: local # The reranker to use. Example: 'local' or 'api'
+  debug: false
+  send_empty: false
+  max_workers: 10
+  max_paper_num: 100
+  source: [rss]
+  reranker: local # 'local' or 'api'
 ```
 
 That's all! Now you can test the workflow by manually triggering it:
@@ -173,7 +182,59 @@ Supported by [uv](https://github.com/astral-sh/uv), this workflow can easily run
 # export ZOTERO_ID=xxxx
 # ...
 cd zotero-arxiv-daily
-uv run main.py
+uv run src/zotero_arxiv_daily/main.py
+```
+
+### MCP Server
+
+The pipeline is also exposed as an MCP server for use with AI agents (Claude, Cursor, etc.).
+
+**Start the server:**
+```bash
+uv run zotero-arxiv-mcp
+```
+
+**Configure in Claude Desktop** (`claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "zotero-arxiv-daily": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/zotero-arxiv-daily", "zotero-arxiv-mcp"]
+    }
+  }
+}
+```
+
+**Available MCP tools:**
+
+| Tool | Description |
+| :--- | :--- |
+| `list_sources` | List all available named feed sources |
+| `register_feed_source` | Register a custom RSS/Atom feed by name |
+| `fetch_corpus` | Load interest corpus from Zotero or a local PDF folder |
+| `retrieve_papers` | Fetch latest papers from RSS feeds |
+| `rerank_papers` | Rank candidate papers against your corpus |
+| `generate_tldr` | Generate a one-sentence TL;DR for a paper |
+| `run_pipeline` | Run the full pipeline end-to-end |
+
+**Example agent workflow:**
+```
+1. fetch_corpus({"type": "zotero", "user_id": "...", "api_key": "..."})
+   — or —
+   fetch_corpus({"type": "pdf_dir", "path": "/my/papers"})
+
+2. retrieve_papers(feeds=["arxiv:cs.AI", "nature"], since_days=1)
+
+3. rerank_papers(papers, corpus)
+
+4. generate_tldr(paper, llm_config)
+```
+
+The agent can also pass a natural language description as a corpus by constructing a fake corpus entry:
+```python
+corpus = [{"title": "interests", "abstract": "I work on transformer optimization and low-resource NLP", "added_date": "...", "paths": []}]
+rerank_papers(papers, corpus)
 ```
 
 ## 🚀 Sync with the latest version
@@ -183,7 +244,7 @@ This project is in active development. You can subscribe this repo via `Watch` s
 
 
 ## 📖 How it works
-*Zotero-arXiv-Daily* firstly retrieves all the papers in your Zotero library and all the papers released in the previous day, via corresponding API. Then it calculates the embedding of each paper's abstract via an embedding model. The score of a paper is its weighted average similarity over all your Zotero papers (newer paper added to the library has higher weight). The TLDR of each paper is generated by LLM, given the text extracted by pymupdf4llm.
+*Zotero-arXiv-Daily* fetches papers from RSS/Atom feeds (arXiv, Nature, Science, BioRxiv, or any custom feed), then ranks them against your interest corpus (Zotero library or local PDFs) using embedding similarity. Newer papers in your corpus get higher weight. The TL;DR of each paper is generated by an LLM using the abstract. Results are delivered by email or returned via MCP tools.
 
 ## 📌 Limitations
 - The recommendation algorithm is very simple, it may not accurately reflect your interest. Welcome better ideas for improving the algorithm!
@@ -197,8 +258,9 @@ Distributed under the AGPLv3 License. See `LICENSE` for detail.
 
 ## ❤️ Acknowledgement
 - [pyzotero](https://github.com/urschrei/pyzotero)
-- [arxiv](https://github.com/lukasschwab/arxiv.py)
+- [feedparser](https://github.com/kurtmckee/feedparser)
 - [sentence_transformers](https://github.com/UKPLab/sentence-transformers)
+- [paperlib](https://github.com/Future-Scholars/paperlib) — inspiration for RSS source handling
 
 ## ☕ Buy Me A Coffee
 If you find this project helpful, welcome to sponsor me via WeChat or via [ko-fi](https://ko-fi.com/tidedra).
