@@ -109,13 +109,15 @@ def retrieve_papers(feeds: list[str], since_days: int | None = 1) -> list[dict]:
 
 
 @mcp.tool()
-def rerank_papers(papers: list[dict], corpus: list[dict], reranker_config: dict = {}) -> list[dict]:
+def rerank_papers(papers: list[dict], corpus: list[dict], reranker_config: dict | None = None) -> list[dict]:
     """Rerank candidate papers against a corpus.
 
     papers: list of paper dicts (from retrieve_papers)
     corpus: list of corpus paper dicts (from fetch_corpus)
     reranker_config: {"type": "local"} or {"type": "api", "key": "...", "base_url": "...", "model": "..."}
     """
+    if reranker_config is None:
+        reranker_config = {}
     from datetime import datetime
     corpus_objs = [CorpusPaper(
         title=c["title"],
@@ -182,11 +184,11 @@ def run_pipeline(
     corpus_source: dict,
     feeds: list[str],
     since_days: int | None = 1,
-    reranker_config: dict = {},
-    llm_config: dict = {},
+    reranker_config: dict | None = None,
+    llm_config: dict | None = None,
     max_paper_num: int = 100,
     send_email_flag: bool = False,
-    email_config: dict = {},
+    email_config: dict | None = None,
 ) -> list[dict]:
     """Run the full pipeline: fetch corpus, retrieve papers, rerank, generate TLDRs.
 
@@ -200,6 +202,12 @@ def run_pipeline(
     send_email_flag: if True, also send email using email_config
     email_config: {"sender": "...", "receiver": "...", "smtp_server": "...", "smtp_port": 465, "sender_password": "..."}
     """
+    if reranker_config is None:
+        reranker_config = {}
+    if llm_config is None:
+        llm_config = {}
+    if email_config is None:
+        email_config = {}
     from tqdm import tqdm
 
     corpus_dicts = fetch_corpus(corpus_source)
@@ -225,16 +233,16 @@ def run_pipeline(
         "language": llm_config.get("language", "English"),
     }
     final_papers = []
-    for pd in tqdm(ranked_dicts):
+    for paper_d in tqdm(ranked_dicts):
         p = Paper(
-            source=pd.get("source", ""),
-            title=pd["title"],
-            authors=pd.get("authors", []),
-            abstract=pd.get("abstract", ""),
-            url=pd.get("url", ""),
-            pdf_url=pd.get("pdf_url"),
-            full_text=pd.get("full_text"),
-            score=pd.get("score"),
+            source=paper_d.get("source", ""),
+            title=paper_d["title"],
+            authors=paper_d.get("authors", []),
+            abstract=paper_d.get("abstract", ""),
+            url=paper_d.get("url", ""),
+            pdf_url=paper_d.get("pdf_url"),
+            full_text=paper_d.get("full_text"),
+            score=paper_d.get("score"),
         )
         p.generate_tldr(client, llm_params)
         p.generate_affiliations(client, llm_params)
