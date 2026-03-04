@@ -26,3 +26,20 @@ def test_fetch_corpus_pdf_dir():
         result = fetch_corpus(corpus_source={"type": "pdf_dir", "path": "/some/dir"})
     assert len(result) == 1
     assert result[0]["title"] == "P"
+
+def test_retrieve_papers_rss():
+    from zotero_arxiv_daily.mcp_server import retrieve_papers
+    from zotero_arxiv_daily.protocol import Paper
+    fake_paper = Paper(source="rss", title="T", authors=[], abstract="A", url="https://x.com/1")
+    with patch('zotero_arxiv_daily.mcp_server.RSSRetriever') as mock_cls:
+        mock_cls.return_value.retrieve_papers.return_value = [fake_paper]
+        result = retrieve_papers(feeds=["arxiv:cs.AI"], since_days=1)
+    assert len(result) == 1
+    assert result[0]["title"] == "T"
+    assert result[0]["url"] == "https://x.com/1"
+
+def test_list_sources_returns_dict():
+    from zotero_arxiv_daily.mcp_server import list_sources
+    result = list_sources()
+    assert "arxiv" in result
+    assert "nature" in result

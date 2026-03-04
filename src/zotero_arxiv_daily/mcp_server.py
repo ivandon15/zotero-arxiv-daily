@@ -1,7 +1,8 @@
 from mcp.server.fastmcp import FastMCP
 from omegaconf import OmegaConf
 from .corpus import ZoteroLoader, PDFLoader
-from .retriever import get_retriever_cls
+from .retriever.rss_retriever import RSSRetriever
+from .retriever.sources import list_sources as _list_sources, register_source
 from .reranker import get_reranker_cls
 from .protocol import Paper, CorpusPaper
 from .construct_email import render_email
@@ -60,26 +61,51 @@ def fetch_corpus(corpus_source: dict) -> list[dict]:
 
 
 @mcp.tool()
-def retrieve_papers(sources: list[str], source_config: dict = {}) -> list[dict]:
-    """Retrieve new papers from arxiv/biorxiv/medrxiv.
+def list_sources() -> dict[str, str]:
+    """List all available named feed sources (builtin + custom registered).
 
-    sources: e.g. ["arxiv", "biorxiv"]
-    source_config: per-source config, e.g. {"arxiv": {"category": ["cs.AI", "cs.LG"]}}
+    Returns a dict of {name: url_or_template}.
+    For parameterized sources like arxiv, use "arxiv:cs.AI" syntax in retrieve_papers.
+    """
+    return _list_sources()
+
+
+@mcp.tool()
+def register_feed_source(name: str, url: str) -> str:
+    """Register a custom named RSS/Atom feed source.
+
+    After registering, use the name in retrieve_papers feeds list.
+    Example: register_feed_source("my_journal", "https://journal.com/rss")
+    """
+    register_source(name, url)
+    return f"Registered source '{name}' -> {url}"
+
+
+@mcp.tool()
+def retrieve_papers(feeds: list[str], since_days: int | None = 1) -> list[dict]:
+    """Retrieve papers from RSS/Atom feeds.
+
+    feeds: list of feed specs. Each can be:
+      - A named source: "nature", "science", "cell", "pnas", etc.
+      - A parameterized source: "arxiv:cs.AI", "arxiv:cs.AI+cs.LG", "biorxiv:neuroscience"
+      - A raw URL: "https://any-rss-feed.com/feed.xml"
+      Use list_sources() to see all available named sources.
+
+    since_days: only return papers published in the last N days.
+      Pass null to retrieve all available entries (for historical search).
     """
     cfg = OmegaConf.create({
-        "executor": {"source": sources, "debug": False, "max_workers": 10},
+        "executor": {"source": ["rss"], "debug": False, "max_workers": 10},
         "source": {
-            "arxiv": source_config.get("arxiv", {"category": None}),
-            "biorxiv": source_config.get("biorxiv", {"category": None}),
-            "medrxiv": source_config.get("medrxiv", {"category": None}),
+            "rss": {
+                "feeds": feeds,
+                **({"since_days": since_days} if since_days is not None else {}),
+            }
         },
     })
-    all_papers = []
-    for source in sources:
-        retriever = get_retriever_cls(source)(cfg)
-        papers = retriever.retrieve_papers()
-        all_papers.extend(papers)
-    return [_paper_to_dict(p) for p in all_papers]
+    retriever = RSSRetriever(cfg)
+    papers = retriever.retrieve_papers()
+    return [_paper_to_dict(p) for p in papers]
 
 
 @mcp.tool()
@@ -154,8 +180,8 @@ def generate_tldr(paper: dict, llm_config: dict) -> dict:
 @mcp.tool()
 def run_pipeline(
     corpus_source: dict,
-    sources: list[str],
-    source_config: dict = {},
+    feeds: list[str],
+    since_days: int | None = 1,
     reranker_config: dict = {},
     llm_config: dict = {},
     max_paper_num: int = 100,
@@ -167,8 +193,8 @@ def run_pipeline(
     Returns the ranked paper list. Optionally sends email if send_email_flag=True.
 
     corpus_source: {"type": "zotero", ...} or {"type": "pdf_dir", "path": "..."}
-    sources: ["arxiv"], ["biorxiv"], ["arxiv", "medrxiv"], etc.
-    source_config: {"arxiv": {"category": ["cs.AI"]}, ...}
+    feeds: list of feed specs, e.g. ["arxiv:cs.AI", "nature", "https://..."]
+    since_days: only return papers published in the last N days (null for all)
     reranker_config: {"type": "local"} or {"type": "api", ...}
     llm_config: {"api_key": "...", "base_url": "...", "generation_kwargs": {"model": "..."}, "language": "English"}
     send_email_flag: if True, also send email using email_config
@@ -181,7 +207,7 @@ def run_pipeline(
         logger.warning("No corpus papers found.")
         return []
 
-    paper_dicts = retrieve_papers(sources, source_config)
+    paper_dicts = retrieve_papers(feeds, since_days)
     if not paper_dicts:
         logger.info("No new papers found.")
         return []
